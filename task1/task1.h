@@ -2,6 +2,7 @@
 #include <initializer_list>
 #include <list>
 #include <stdexcept>
+#include <iterator>
 
 template<class KeyType, class ValueType, class Hash = std::hash<KeyType> >
 class HashMap {
@@ -11,13 +12,13 @@ class HashMap {
     Hash hasher;
 
     std::vector<std::list<MyPair>> data;
-    size_t countOfKeys = 0;
+    size_t keyCount = 0;
 
-    const double GoldenSection = 1.618033988;
-    void rehash(const size_t count) {
+    const double MaxLoadFactor = 1.618033988; // Golden ratio
+    void rehash(const size_t bucketSize) {
         std::vector<std::list<MyPair>> old_data(std::move(data));
-        countOfKeys = 0;
-        data.resize(count);
+        keyCount = 0;
+        data.resize(bucketSize);
         for (const auto &bucket : old_data) {
             for (const auto &element : bucket) {
                 insert(element);
@@ -25,27 +26,29 @@ class HashMap {
         }
     }
 
-    size_t bucketFromKey (const KeyType key) const {
+    size_t bucketIndex(const KeyType &key) const {
         return hasher(key) % data.size();
     }
 
   public:
-    HashMap(Hash _hasher = Hash()) : hasher(_hasher) {
+    explicit HashMap(Hash _hasher = Hash()) : hasher(_hasher) {
         clear();
     }
 
     template<typename iter>
     HashMap(iter begin, iter end, Hash _hasher = Hash()) : hasher(_hasher) {
         clear();
+        rehash(std::distance(begin, end) * MaxLoadFactor + 1);
         for (auto it = begin; it != end; ++it) {
             insert(*it);
         }
     }
 
-    HashMap(const std::initializer_list<MyPair> &l,
+    HashMap(const std::initializer_list<MyPair> &list,
             Hash _hasher = Hash()) : hasher(_hasher) {
         clear();
-        for (auto it = l.begin(); it != l.end(); ++it) {
+        rehash(std::distance(list.begin(), list.end()) * MaxLoadFactor + 1);
+        for (auto it = list.begin(); it != list.end(); ++it) {
             insert(*it);
         }
     }
@@ -74,7 +77,7 @@ class HashMap {
     }
 
     size_t size() const {
-        return countOfKeys;
+        return keyCount;
     }
 
     bool empty() const {
@@ -82,7 +85,7 @@ class HashMap {
     }
 
     void insert(const MyPair &v) {
-        auto &bucket = data[bucketFromKey(v.first)];
+        auto &bucket = data[bucketIndex(v.first)];
 
         for (const auto &element : bucket) {
             if (element.first == v.first) {
@@ -90,20 +93,17 @@ class HashMap {
             }
         }
         bucket.push_back(v);
-        ++countOfKeys;
-        if (countOfKeys >= data.size()) {
-            rehash(static_cast<size_t>(countOfKeys * GoldenSection + 1));
+        ++keyCount;
+        if (keyCount >= data.size()) {
+            rehash(static_cast<size_t>(keyCount * MaxLoadFactor + 1));
         }
     }
 
     void erase(const KeyType& key) {
-        auto &bucket = data[bucketFromKey(key)];
+        auto &bucket = data[bucketIndex(key)];
 
         auto it = bucket.begin();
-        while (it != bucket.end()) {
-            if (it->first == key) {
-                break;
-            }
+        while (it != bucket.end() && it->first != key) {
             ++it;
         }
         if (it == bucket.end()) {
@@ -111,9 +111,9 @@ class HashMap {
         }
 
         bucket.erase(it);
-        --countOfKeys;
-        if (countOfKeys * GoldenSection * GoldenSection < bucket.size()) {
-            rehash(static_cast<size_t>(countOfKeys * GoldenSection + 1));
+        --keyCount;
+        if (keyCount * MaxLoadFactor * MaxLoadFactor < bucket.size()) { //if the number of blocks needs to be recalculated
+            rehash(static_cast<size_t>(keyCount * MaxLoadFactor + 1));
         }
     }
 
@@ -127,7 +127,7 @@ class HashMap {
     }
 
     const ValueType& at(const KeyType& key) const {
-        auto &bucket = data[bucketFromKey(key)];
+        auto &bucket = data[bucketIndex(key)];
 
         for (const auto &element : bucket) {
             if (element.first == key) {
@@ -135,13 +135,13 @@ class HashMap {
             }
         }
 
-        throw std::out_of_range("There is not such key");
+        throw std::out_of_range("There is no such key");
     }
 
     void clear() {
         data.clear();
         data.resize(1);
-        countOfKeys = 0;
+        keyCount = 0;
     }
 
     class iterator : public std::iterator
@@ -160,7 +160,8 @@ class HashMap {
                  HashMap* _map) :
             bucketIt(_bucketIt), elementIt(_elementIt), map(_map) {}
 
-        iterator(HashMap* _map) : bucketIt(nullptr), elementIt(nullptr), map(_map) {}
+        explicit iterator(HashMap* _map) : bucketIt(nullptr), elementIt(nullptr),
+            map(_map) {}
 
         iterator() : bucketIt(nullptr), elementIt(nullptr), map(nullptr) {}
 
@@ -182,7 +183,7 @@ class HashMap {
             return *this;
         }
 
-        iterator operator++(int junk) {
+        iterator operator++(int) {
             iterator i(*this);
             ++(*this);
             return i;
@@ -201,7 +202,7 @@ class HashMap {
         }
 
         bool operator!=(const iterator &it) const {
-            return (this->bucketIt != it.bucketIt) || (this->elementIt != it.elementIt);
+            return !(*this == it);
         }
     };
 
@@ -221,7 +222,8 @@ class HashMap {
                        const HashMap* _map) :
             bucketIt(_bucketIt), elementIt(_elementIt), map(_map) {}
 
-        const_iterator(const HashMap* _map) : bucketIt(nullptr), elementIt(nullptr),
+        explicit const_iterator(const HashMap* _map) : bucketIt(nullptr),
+            elementIt(nullptr),
             map(_map) {}
 
         const_iterator() : bucketIt(nullptr), elementIt(nullptr), map(nullptr) {}
@@ -245,9 +247,9 @@ class HashMap {
         }
 
         const_iterator operator++(int) {
-            const_iterator i(*this);
+            const_iterator it(*this);
             ++(*this);
-            return i;
+            return it;
         }
 
         const MyPair &operator*() {
@@ -298,7 +300,7 @@ class HashMap {
     }
 
     iterator find(const KeyType &key) {
-        auto &bucket = data[bucketFromKey(key)];
+        auto &bucket = data[bucketIndex(key)];
 
         auto it = bucket.begin();
         while (it != bucket.end()) {
@@ -311,11 +313,11 @@ class HashMap {
             return end();
         }
 
-        return iterator(data.begin() + bucketFromKey(key), it, this);
+        return iterator(data.begin() + bucketIndex(key), it, this);
     }
 
     const_iterator find(const KeyType &key) const {
-        auto &bucket = data[bucketFromKey(key)];
+        auto &bucket = data[bucketIndex(key)];
 
         auto it = bucket.begin();
         while (it != bucket.end()) {
@@ -328,7 +330,7 @@ class HashMap {
             return end();
         }
 
-        return const_iterator(data.begin() + bucketFromKey(key), it, this);
+        return const_iterator(data.begin() + bucketIndex(key), it, this);
     }
 
 };
