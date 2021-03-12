@@ -15,6 +15,8 @@ class HashMap {
     size_t keyCount = 0;
 
     const double MaxLoadFactor = 1.618033988; // Golden ratio
+    const double MinLoadFactor = MaxLoadFactor * MaxLoadFactor;
+
     void rehash(const size_t bucketSize) {
         std::vector<std::list<MyPair>> old_data(std::move(data));
         keyCount = 0;
@@ -56,15 +58,17 @@ class HashMap {
     HashMap(const HashMap &other) {
         hasher = other.hasher;
         clear();
+        rehash(other.data.size());
         for (const auto &it : other) {
             insert(it);
         }
     }
 
-    HashMap &operator=(const HashMap &other) {
+    HashMap& operator=(const HashMap &other) {
         if (&other != this) {
             hasher = other.hasher;
             clear();
+            rehash(other.data.size());
             for (const auto &it : other) {
                 insert(it);
             }
@@ -112,7 +116,8 @@ class HashMap {
 
         bucket.erase(it);
         --keyCount;
-        if (keyCount * MaxLoadFactor * MaxLoadFactor < bucket.size()) { //if the number of blocks needs to be recalculated
+        if (keyCount * MinLoadFactor <
+                bucket.size()) { //if the number of blocks needs to be recalculated
             rehash(static_cast<size_t>(keyCount * MaxLoadFactor + 1));
         }
     }
@@ -165,7 +170,7 @@ class HashMap {
 
         iterator() : bucketIt(nullptr), elementIt(nullptr), map(nullptr) {}
 
-        iterator & operator++() {
+        iterator& operator++() {
             if (bucketIt == map->data.end()) {
                 return *this;
             }
@@ -189,7 +194,7 @@ class HashMap {
             return i;
         }
 
-        const MyPair &operator*() {
+        const MyPair& operator*() {
             return *elementIt;
         }
 
@@ -228,7 +233,7 @@ class HashMap {
 
         const_iterator() : bucketIt(nullptr), elementIt(nullptr), map(nullptr) {}
 
-        const_iterator & operator++() {
+        const_iterator& operator++() {
             if (bucketIt == map->data.end()) {
                 return *this;
             }
@@ -252,7 +257,7 @@ class HashMap {
             return it;
         }
 
-        const MyPair &operator*() {
+        const MyPair& operator*() {
             return *elementIt;
         }
 
@@ -332,5 +337,4 @@ class HashMap {
 
         return const_iterator(data.begin() + bucketIndex(key), it, this);
     }
-
 };
