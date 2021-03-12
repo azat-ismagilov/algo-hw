@@ -116,8 +116,8 @@ class HashMap {
 
         bucket.erase(it);
         --keyCount;
-        if (keyCount * MinLoadFactor <
-                bucket.size()) { //if the number of blocks needs to be recalculated
+        if (keyCount * MinLoadFactor < bucket.size()) {
+            //if the number of blocks needs to be recalculated
             rehash(static_cast<size_t>(keyCount * MaxLoadFactor + 1));
         }
     }
@@ -188,10 +188,10 @@ class HashMap {
             return *this;
         }
 
-        iterator operator++(int) {
-            iterator i(*this);
+        iterator operator++() {
+            iterator it(*this);
             ++(*this);
-            return i;
+            return it;
         }
 
         const MyPair& operator*() {
